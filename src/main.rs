@@ -27,34 +27,34 @@ fn main() -> Result<(), Box<dyn Error>> {
     // Ensure dates are sorted (if not already).
     dates.sort();
 
-    // Compute differences (in seconds) between adjacent dates.
-    // We'll plot the point corresponding to the later date of each pair.
+    // Compute differences between adjacent dates in minutes (as f64).
+    // We plot the point corresponding to the later date of each pair.
     let first_date = dates[0];
-    let data: Vec<(i64, i64)> = dates.windows(2)
+    let data: Vec<(i64, f64)> = dates.windows(2)
         .map(|window| {
             let dt_current = window[1];
-            let diff = dt_current.signed_duration_since(window[0]).num_seconds();
+            let diff_seconds = dt_current.signed_duration_since(window[0]).num_seconds();
+            let diff_minutes = diff_seconds as f64 / 60.0;
             // x-value: seconds elapsed since the first date.
             let x_val = dt_current.timestamp() - first_date.timestamp();
-            (x_val, diff)
+            (x_val, diff_minutes)
         })
         .collect();
 
     // Define the x-axis range (in seconds from the first date).
     let x_min = 0;
     let x_max = dates.last().unwrap().timestamp() - first_date.timestamp();
-    // y-axis range based on the computed differences.
-    let y_min = data.iter().map(|&(_, diff)| diff).min().unwrap() - 1;
-    let y_max = data.iter().map(|&(_, diff)| diff).max().unwrap() + 1;
+    // y-axis range based on the computed differences in minutes.
+    let y_min = data.iter().map(|&(_, diff)| diff).fold(f64::INFINITY, f64::min) - 0.1;
+    let y_max = data.iter().map(|&(_, diff)| diff).fold(f64::NEG_INFINITY, f64::max) + 0.1;
 
     // Create a drawing area (output image).
     let root = BitMapBackend::new("output.png", (640, 480)).into_drawing_area();
     root.fill(&WHITE)?;
 
-    // Build the chart with custom x-axis labels (formatted as HH:MM:SS).
     let first_ts = first_date.timestamp();
     let mut chart = ChartBuilder::on(&root)
-        .caption("Date Differences", ("sans-serif", 20))
+        .caption("Date Differences in Minutes", ("sans-serif", 20))
         .margin(20)
         .x_label_area_size(50)
         .y_label_area_size(50)
@@ -62,7 +62,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     chart.configure_mesh()
         .x_desc("Time (since first date)")
-        .y_desc("Difference (seconds)")
+        .y_desc("Difference (minutes)")
         .x_label_formatter(&move |x| {
             // Convert x (seconds offset) back to a time.
             let dt = NaiveDateTime::from_timestamp(first_ts + *x, 0);
@@ -75,7 +75,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         data.iter().map(|&(x, y)| (x, y)),
         &RED,
     ))?
-    .label("Diff (s)")
+    .label("Diff (min)")
     .legend(|(x, y)| Path::new(vec![(x, y), (x + 20, y)], &RED));
 
     // Optional: add a legend.
